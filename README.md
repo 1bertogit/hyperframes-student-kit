@@ -12,12 +12,12 @@ Four finished videos made with this kit.
 
 Made with the `motion-showreel` skill: 15 seconds, 1920x1080, 60fps, cut to a
 129 BPM grid. The red scrubber dot travels through seven craft chapters and
-lands as the play button in the logo. Click the frame to watch.
+lands as the play button in the logo.
 
-[![YouTube motion showreel: a red lacquer play button with a lookdev readout](docs/images/youtube-showreel.jpg)](examples/showcase/youtube-showreel.mp4)
+https://github.com/user-attachments/assets/056b46e9-7379-4e71-b825-20fb9f8e9555
 
-The three short-form videos below were created by Nate. Press Play to watch
-here in the README.
+The three short-form videos below were created by Nate. Press Play on any video
+to watch it here in the README.
 
 ### Curiosity reel: unlock your project
 

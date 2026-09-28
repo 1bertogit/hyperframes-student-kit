@@ -8,7 +8,7 @@ audio. Its generated lookdev shots came from Kie.ai, its music from Suno via
 Kie.ai, and its sound effects from ElevenLabs. It is a design study, not an official
 YouTube production.
 
-[![YouTube motion showreel](../../docs/images/youtube-showreel.jpg)](youtube-showreel.mp4)
+https://github.com/user-attachments/assets/056b46e9-7379-4e71-b825-20fb9f8e9555
 
 ## Short-form examples
 
