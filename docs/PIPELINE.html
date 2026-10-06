@@ -1,0 +1,493 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline de Edição</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: índice lateral fixo + trilha de timeline no topo; cada etapa é um bloco de leitura com entra / sai / porta. */
+:root {
+  --bg: #eef1f0;
+  --surface: #ffffff;
+  --ink: #12201c;
+  --muted: #55655f;
+  --line: #d3dbd8;
+  --accent: #0b6b5b;
+  --accent-ink: #ffffff;
+  --cut: #b8420f;
+  --c-prep: #dbe7e3;
+  --c-cut: #f3dccf;
+  --c-make: #d5e2f0;
+  --c-check: #e0dcf0;
+  --code-bg: #14211d;
+  --code-ink: #dcebe5;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+}
+.wrap { max-width: 1180px; margin-inline: auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 40px 96px; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.12; text-wrap: balance; margin: 0; }
+code, pre, .mono { font-family: var(--font-mono); }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* topo */
+.top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 70ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(2.2rem, 6vw, 3.6rem); font-weight: 700; letter-spacing: -.02em; }
+.lede { font-size: 1.15rem; color: var(--muted); margin: 0; }
+.principles { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.principles li { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
+
+/* trilha de timeline */
+.track-wrap { margin-top: 44px; }
+.track-label { display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.track-scroll { overflow-x: auto; padding-bottom: 10px; }
+.track { display: flex; gap: 4px; min-width: 980px; }
+.clip {
+  flex: 1 1 0; min-width: 0; display: grid; gap: 2px; align-content: start;
+  padding: 10px 12px 12px; border-radius: 6px; border: 1px solid var(--line);
+  text-decoration: none; color: var(--ink); background: var(--c-prep);
+}
+.clip:hover { border-color: var(--accent); }
+.clip .tc { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.clip .nm { font-family: var(--font-display); font-weight: 600; font-size: 15px; line-height: 1.2; }
+.clip.cut { background: var(--c-cut); }
+.clip.make { background: var(--c-make); }
+.clip.check { background: var(--c-check); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--c-prep); border: 1px solid var(--line); }
+.legend i.cut { background: var(--c-cut); } .legend i.make { background: var(--c-make); } .legend i.check { background: var(--c-check); }
+
+/* layout */
+.layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 48px; margin-top: 56px; }
+.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; display: grid; gap: 2px; font-size: 14px; }
+.toc a { color: var(--muted); text-decoration: none; padding: 4px 10px; border-left: 2px solid var(--line); }
+.toc a:hover { color: var(--ink); }
+.toc a[aria-current="true"] { color: var(--ink); border-left-color: var(--accent); font-weight: 600; }
+.toc .sep { margin: 10px 0 2px 10px; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+main { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 56px; }
+
+/* seções */
+.block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; scroll-margin-top: 24px; }
+.block > h2 { font-size: clamp(1.5rem, 3vw, 2rem); }
+.block > p { margin: 0; max-width: 68ch; }
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(16px, 3vw, 28px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; scroll-margin-top: 24px; }
+.stage header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
+.tag { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.stage h2 { font-size: clamp(1.35rem, 2.6vw, 1.75rem); }
+.goal { margin: 0; max-width: 66ch; }
+.io { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: 15px; }
+.io dt { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 3px; }
+.io dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.io dd.gate { color: var(--ink); }
+.io dd.gate::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+.note { font-size: 14px; color: var(--muted); margin: 0; }
+.stage ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 15px; }
+.inline { font-family: var(--font-mono); font-size: .88em; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+
+/* código */
+.code { position: relative; }
+.code pre { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 8px; padding: 14px 84px 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+.code button, .cmd button {
+  position: absolute; top: 8px; right: 8px; font: 500 12px var(--font-mono); cursor: pointer;
+  background: transparent; color: var(--code-ink); border: 1px solid #4a5d56; border-radius: 6px; padding: 4px 9px;
+}
+.code button:hover, .cmd button:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* tabelas */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 500; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.k { white-space: nowrap; font-family: var(--font-mono); font-size: 13px; }
+td.cap { font-variant-numeric: tabular-nums; white-space: nowrap; font-family: var(--font-mono); }
+.cmd { position: relative; padding-right: 76px; min-width: 260px; }
+.cmd code { font-size: 13px; overflow-wrap: anywhere; }
+.cmd button { top: 0; border-color: var(--line); color: var(--ink); }
+
+/* loop */
+.loop { display: flex; flex-wrap: wrap; gap: 8px; counter-reset: s; list-style: none; margin: 0; padding: 0; }
+.loop li { flex: 1 1 170px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 14px; position: relative; }
+.loop li b { display: block; font-family: var(--font-display); font-size: 16px; margin-bottom: 2px; }
+.loop li.back { border-style: dashed; border-color: var(--cut); }
+.loop li.back b { color: var(--cut); }
+
+/* árvore */
+.tree { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; overflow-x: auto; margin: 0; font-size: 13px; line-height: 1.7; }
+.tree .c { color: var(--muted); }
+
+.limits { display: grid; gap: 10px; margin: 0; padding-left: 1.2em; max-width: 70ch; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 28px; margin-top: 36px; }
+  .toc { position: static; display: flex; overflow-x: auto; gap: 6px; padding-bottom: 6px; }
+  .toc a { white-space: nowrap; border-left: 0; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; background: var(--surface); }
+  .toc a[aria-current="true"] { border-color: var(--accent); }
+  .toc .sep { display: none; }
+  .io { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .io dt { padding-top: 10px; }
+}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="eyebrow">HyperFrames Student Kit · mapa do processo</div>
+    <h1>Pipeline de Edição</h1>
+    <p class="lede">Da gravação bruta ao vídeo verificado e entregue. Cada etapa mostra o que entra, o que sai e a porta que precisa ser cumprida antes de avançar.</p>
+    <ul class="principles">
+      <li>O original nunca é tocado</li>
+      <li>Uma timeline por arquivo</li>
+      <li>As palavras comandam tudo</li>
+      <li>Render determinístico</li>
+      <li>Evidência, não afirmação</li>
+      <li>Aprovação explícita</li>
+    </ul>
+  </div>
+
+  <div class="track-wrap">
+    <div class="track-label"><span>RAW</span><span>10 etapas · clique para ir</span><span>MP4 FINAL</span></div>
+    <div class="track-scroll">
+      <nav class="track" aria-label="Etapas do pipeline">
+        <a class="clip" href="#e0"><span class="tc">E0</span><span class="nm">Setup</span></a>
+        <a class="clip" href="#e1"><span class="tc">E1</span><span class="nm">Projeto</span></a>
+        <a class="clip" href="#e2"><span class="tc">E2</span><span class="nm">Transcrever</span></a>
+        <a class="clip cut" href="#e3"><span class="tc">E3</span><span class="nm">Cortar silêncios</span></a>
+        <a class="clip cut" href="#e4"><span class="tc">E4</span><span class="nm">Revisar erros</span></a>
+        <a class="clip make" href="#e5"><span class="tc">E5</span><span class="nm">Dirigir</span></a>
+        <a class="clip make" href="#e6"><span class="tc">E6</span><span class="nm">Visual</span></a>
+        <a class="clip make" href="#e7"><span class="tc">E7</span><span class="nm">Áudio</span></a>
+        <a class="clip check" href="#e8"><span class="tc">E8</span><span class="nm">Verificar</span></a>
+        <a class="clip check" href="#e9"><span class="tc">E9</span><span class="nm">Final e entrega</span></a>
+      </nav>
+    </div>
+    <div class="legend"><span><i></i>preparar</span><span><i class="cut"></i>cortar</span><span><i class="make"></i>criar</span><span><i class="check"></i>verificar</span></div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Índice">
+      <div class="sep">Visão geral</div>
+      <a href="#rotas">Rotas</a>
+      <div class="sep">Etapas</div>
+      <a href="#e0">0 · Setup</a>
+      <a href="#e1">1 · Projeto</a>
+      <a href="#e2">2 · Transcrever</a>
+      <a href="#e3">3 · Silêncios</a>
+      <a href="#e4">4 · Erros</a>
+      <a href="#e5">5 · Dirigir</a>
+      <a href="#e6">6 · Visual</a>
+      <a href="#e7">7 · Áudio</a>
+      <a href="#e8">8 · Verificar</a>
+      <a href="#loop">Loop de crítica</a>
+      <a href="#e9">9 · Entrega</a>
+      <div class="sep">Referência</div>
+      <a href="#arquivos">Arquivos</a>
+      <a href="#comandos">Comandos</a>
+      <a href="#limites">Limites</a>
+    </nav>
+
+    <main>
+      <section class="block" id="rotas">
+        <h2>Escolha a rota</h2>
+        <p>O tronco é o mesmo. A skill muda conforme o tipo de vídeo.</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Objetivo</th><th>Skill</th><th>Observação</th></tr></thead>
+            <tbody>
+              <tr><td>Vídeo longo com apresentador</td><td class="k">edit-video</td><td>Orquestra as etapas 1 a 9</td></tr>
+              <tr><td>Reel, Short ou anúncio curto</td><td class="k">short-form-edit</td><td>Acrescenta gancho, open loops, B-roll e portas de SFX. Padrão 1080×1920</td></tr>
+              <tr><td>Só remover silêncio</td><td class="k">cut-silences</td><td></td></tr>
+              <tr><td>Só retakes e gagueiras</td><td class="k">cut-mistakes</td><td>Precisa da transcrição retimada do <span class="inline">cut-silences</span></td></tr>
+              <tr><td>Arco narrativo e mundo visual contínuo</td><td class="k">video-storytelling</td><td>Camada visual do <span class="inline">edit-video</span></td></tr>
+              <tr><td>Beats de overlay, takeovers, glass cards</td><td class="k">hyperframes-video-beats</td><td>Overlays de vídeo longo</td></tr>
+              <tr><td>Showreel sincronizado com música</td><td class="k">motion-showreel</td><td>Grade de batidas, sem apresentador</td></tr>
+              <tr><td>Vídeo a partir de um briefing</td><td class="k">make-a-video</td><td>Sem filmagem</td></tr>
+              <tr><td>Vídeo a partir de um site</td><td class="k">website-to-hyperframes</td><td></td></tr>
+              <tr><td>Escolher ou estender um estilo</td><td class="k">style-library</td><td>Cards com DESIGN.md, tokens CSS e slots nomeados</td></tr>
+              <tr><td>Reel no estilo atlas clínico</td><td class="k">atlas-reel</td><td>Só manutenção de projetos nesse estilo</td></tr>
+              <tr><td>Exemplos antigos May Shorts</td><td class="k">short-form-video</td><td>Não usar em reels novos</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="stage" id="e0">
+        <header><span class="tag">Etapa 0</span><h2>Setup</h2></header>
+        <p class="goal">Uma vez por máquina e depois de atualizar o kit. Leia o guia de ferramentas antes de escolher serviço de transcrição, geração ou voz.</p>
+        <div class="code"><pre><code>npm ci
+npm run setup           # confere as ferramentas
+npm run check           # checagem de distribuição do kit
+npx hyperframes doctor  # diagnostica o ambiente de render</code></pre><button type="button" class="copy">Copiar</button></div>
+        <dl class="io">
+          <dt>Entra</dt><dd>Node, FFmpeg, Chrome ou Chromium</dd>
+          <dt>Sai</dt><dd>Ambiente verificado</dd>
+          <dt>Porta</dt><dd class="gate"><span class="inline">doctor</span> sem erros</dd>
+        </dl>
+      </section>
+
+      <section class="stage" id="e1">
+        <header><span class="tag">Etapa 1</span><h2>Criar o projeto</h2></header>
+        <p class="goal">Copia o starter para <span class="inline">video-projects/&lt;slug&gt;/</span>. Rode os comandos do HyperFrames de dentro dessa pasta.</p>
+        <div class="code"><pre><code>npm run new-video -- my-video   # slug minúsculo com hífens</code></pre><button type="button" class="copy">Copiar</button></div>
+        <dl class="io">
+          <dt>Entra</dt><dd>Slug em kebab-case</dd>
+          <dt>Sai</dt><dd>Pasta do projeto com <span class="inline">assets/</span>, <span class="inline">compositions/</span>, <span class="inline">renders/</span> e GSAP local</dd>
+          <dt>Porta</dt><dd class="gate">Gravação em <span class="inline">assets/raw.mp4</span>, original preservado</dd>
+        </dl>
+      </section>
+
+      <section class="stage" id="e2">
+        <header><span class="tag">Etapa 2</span><h2>Transcrever</h2></header>
+        <p class="goal">Timestamps por palavra para a gravação inteira. Tudo o que vem depois se ancora neles.</p>
+        <div class="code"><pre><code>node scripts/transcribe-elevenlabs.mjs video-projects/my-video/assets/raw.mp4
+
+# termos que o ASR erra sempre (marcas, vocabulário técnico)
+node scripts/apply-caption-corrections.mjs video-projects/my-video/assets/raw.json</code></pre><button type="button" class="copy">Copiar</button></div>
+        <dl class="io">
+          <dt>Entra</dt><dd><span class="inline">raw.mp4</span>. Provedor à escolha: ElevenLabs Scribe, Deepgram, Whisper ou transcrição verificada já existente</dd>
+          <dt>Sai</dt><dd><span class="inline">raw.json</span> no formato <span class="inline">{ words: [{ text, start, end }], audio_duration_secs }</span> e <span class="inline">raw.corrected.json</span></dd>
+          <dt>Porta</dt><dd class="gate">Palavra a palavra, com tempos. As correções valem só para legenda e texto na tela; âncoras de beat e <span class="inline">validate-beat-sync</span> seguem a transcrição original</dd>
+        </dl>
+        <p class="note">O glossário fica em <span class="inline">caption-corrections.json</span> e preserva o tempo: uma correção de várias palavras vira uma palavra que cobre o intervalo inteiro.</p>
+      </section>
+
+      <section class="stage" id="e3">
+        <header><span class="tag">Etapa 3</span><h2>Cortar silêncios</h2></header>
+        <p class="goal">Remove o ar morto sem apagar pausas que carregam sentido.</p>
+        <div class="code"><pre><code>node .claude/skills/cut-silences/scripts/cut-silences.mjs \
+  video-projects/my-video/assets/raw.json \
+  --video video-projects/my-video/assets/raw.mp4 \
+  --out-dir video-projects/my-video/assets \
+  --output video-projects/my-video/assets/silenced.mp4 --apply</code></pre><button type="button" class="copy">Copiar</button></div>
+        <dl class="io">
+          <dt>Entra</dt><dd><span class="inline">raw.json</span> e <span class="inline">raw.mp4</span></dd>
+          <dt>Sai</dt><dd><span class="inline">silenced.mp4</span> e <span class="inline">raw.silence-transcript.json</span> (retimada)</dd>
+          <dt>Porta</dt><dd class="gate">Pausas dramáticas e respiros preservados</dd>
+        </dl>
+        <p class="note">No Codex, troque <span class="inline">.claude</span> por <span class="inline">.agents</span>.</p>
+      </section>
+
+      <section class="stage" id="e4">
+        <header><span class="tag">Etapa 4</span><h2>Revisar erros e travar o corte</h2></header>
+        <p class="goal">Um detector propõe; o julgamento editorial decide. Leia cada candidato no contexto da fala.</p>
+        <div class="code"><pre><code>node .claude/skills/cut-mistakes/scripts/find-cut-candidates.mjs \
+  video-projects/my-video/assets/raw.silence-transcript.json \
+  --out-dir video-projects/my-video/assets
+
+# escreva as decisões revisadas em approved-cuts.json, depois:
+node .claude/skills/cut-mistakes/scripts/apply-cuts.mjs \
+  video-projects/my-video/assets/raw.silence-transcript.json \
+  --cuts video-projects/my-video/assets/approved-cuts.json \
+  --video video-projects/my-video/assets/silenced.mp4 \
+  --out-dir video-projects/my-video/assets \
+  --output video-projects/my-video/assets/clean.mp4 --apply</code></pre><button type="button" class="copy">Copiar</button></div>
+        <dl class="io">
+          <dt>Entra</dt><dd>Candidatos de corte e sua revisão. Formato: <span class="inline">{ "cuts": [{ "start": 1.2, "end": 1.5, "reason": "stutter" }] }</span>, tempos na timeline do vídeo sem silêncio. Lista vazia é válida</dd>
+          <dt>Sai</dt><dd><span class="inline">clean.mp4</span> e <span class="inline">raw.mistakes-transcript.json</span>, copiada para <span class="inline">assets/transcript.json</span></dd>
+          <dt>Porta</dt><dd class="gate">Repetição intencional não é erro. Nunca use tempos do bruto contra o vídeo limpo. Em reels, o corte trava depois do animatic, antes dos gráficos finais</dd>
+        </dl>
+      </section>
+
+      <section class="stage" id="e5">
+        <header><span class="tag">Etapa 5</span><h2>Dirigir</h2></header>
+        <p class="goal">Decida o que o vídeo é antes de escrever HTML.</p>
+        <ul>
+          <li>Leia <span class="inline">MOTION_PHILOSOPHY.md</span> (referência de estilo; o briefing do projeto manda no ritmo, paleta e tipografia) e o <span class="inline">DESIGN.md</span>.</li>
+          <li>Sem direção definida, escolha ou adapte um estilo em <span class="inline">style-library/registry.json</span>.</li>
+          <li>Escreva o <b>beat sheet</b>: âncora falada, ideia na tela, visual, tempo de entrada e callback. Uma ideia visual por beat.</li>
+          <li>Reels: trate os 3 primeiros segundos como uma edição à parte (três aberturas, promessa e payoff verdadeiros) e escreva o <span class="inline">OPEN-LOOPS.json</span>.</li>
+          <li>Com vídeo de referência, salve o <span class="inline">REFERENCE-ANALYSIS.md</span>: copie mecanismos, nunca o conteúdo.</li>
+        </ul>
+        <dl class="io">
+          <dt>Skills</dt><dd><span class="inline">video-storytelling</span> · <span class="inline">hyperframes-video-beats</span> · <span class="inline">style-library</span></dd>
+          <dt>Sai</dt><dd><span class="inline">DESIGN.md</span>, beat sheet, <span class="inline">OPEN-LOOPS.json</span> (reels)</dd>
+          <dt>Porta</dt><dd class="gate">Cada plano tem um motivo. Um loop principal aberto por vez, fechado antes do CTA</dd>
+        </dl>
+      </section>
+
+      <section class="stage" id="e6">
+        <header><span class="tag">Etapa 6</span><h2>Construir o visual</h2></header>
+        <p class="goal">Composições HyperFrames com GSAP, ancoradas nas palavras da transcrição.</p>
+        <ul>
+          <li>Raiz visível com <span class="inline">id</span>, <span class="inline">data-composition-id</span>, <span class="inline">data-start</span>, <span class="inline">duration</span>, <span class="inline">width</span>, <span class="inline">height</span>. Clipes na mesma trilha não se sobrepõem.</li>
+          <li>Vídeo mudo, com áudio em elemento irmão. A câmera anima um wrapper sem tempo próprio.</li>
+          <li>Uma timeline GSAP pausada por composição, registrada em <span class="inline">window.__timelines</span>. Sem timers nem transições CSS.</li>
+          <li>Revelações coladas no substantivo falado, a até 2 quadros do início da palavra.</li>
+          <li>B-roll com movimento real, nunca imagem parada com zoom. Registre a origem em <span class="inline">footage-ledger.json</span>.</li>
+          <li>Logos e interfaces reais ou oficiais. Nada de evidência inventada.</li>
+        </ul>
+        <dl class="io">
+          <dt>Skills</dt><dd><span class="inline">hyperframes</span> · <span class="inline">gsap</span> · <span class="inline">style-library</span></dd>
+          <dt>Sai</dt><dd><span class="inline">index.html</span>, <span class="inline">compositions/</span>, <span class="inline">footage-ledger.json</span></dd>
+          <dt>Porta</dt><dd class="gate">Assets locais, timelines finitas com duração explícita</dd>
+        </dl>
+      </section>
+
+      <section class="stage" id="e7">
+        <header><span class="tag">Etapa 7</span><h2>Construir o áudio</h2></header>
+        <p class="goal">A voz continua dominante. Música e efeitos servem a ela.</p>
+        <ul>
+          <li>Normalize a voz. Comece a trilha 14 a 20 dB abaixo e ajuste na faixa real. Abaixe sob a fala e termine com fade limpo.</li>
+          <li>Efeitos saem do mapa de eventos visuais e alinham o pico audível, não o início do arquivo. Varie densidade e nível. Alguns cortes passam sem whoosh.</li>
+          <li>Registre a origem de música e efeitos e confira a licença antes de usar material baixado.</li>
+        </ul>
+        <dl class="io">
+          <dt>Entra</dt><dd>Voz do vídeo limpo, trilha, mapa de eventos</dd>
+          <dt>Sai</dt><dd>Mix com medição salva</dd>
+          <dt>Porta</dt><dd class="gate">Cerca de −16 LUFS, pico real ≤ −1 dBTP, razão trilha/voz medida</dd>
+        </dl>
+      </section>
+
+      <section class="stage" id="e8">
+        <header><span class="tag">Etapa 8</span><h2>Verificar</h2></header>
+        <p class="goal">Checagens estruturais primeiro, depois o rascunho renderizado.</p>
+        <div class="code"><pre><code>node scripts/preflight.mjs video-projects/my-video
+npm run validate-beats -- video-projects/my-video       # só sub-composições ancoradas
+npm run validate:short-form -- video-projects/my-video  # reels
+npm run validate:footage -- video-projects/my-video     # reels com B-roll em vídeo
+cd video-projects/my-video &amp;&amp; npx hyperframes lint
+npx hyperframes preview                                 # revise no Studio
+npx hyperframes render --quality draft</code></pre><button type="button" class="copy">Copiar</button></div>
+        <dl class="io">
+          <dt>Entra</dt><dd>Composições, transcrição, plano</dd>
+          <dt>Sai</dt><dd>Rascunho renderizado, sheets, notas por rodada</dd>
+          <dt>Porta</dt><dd class="gate">Lint e preflight limpos, loop de crítica com todas as notas ≥ 8</dd>
+        </dl>
+        <p class="note">Para escrubar MP4 no preview use um servidor com suporte a Range, como <span class="inline">npx serve</span>.</p>
+      </section>
+
+      <section class="block" id="loop">
+        <h2>Dentro da etapa 8: loop de crítica</h2>
+        <p>Rode sobre o rascunho codificado, nunca sobre o código da composição. As notas são o julgamento do revisor sobre os quadros, não métrica de audiência.</p>
+        <ol class="loop">
+          <li><b>1 · Sheets</b>Contact sheet a 2 fps, strips em volta das ações rápidas, sheet em 360 px de largura.</li>
+          <li><b>2 · Medir</b><span class="inline">blackdetect</span>, <span class="inline">freezedetect</span> e MD5 do áudio quando ele foi só copiado.</li>
+          <li><b>3 · Nota 1–10</b>Gancho, leitura no celular, movimento, variedade, composição, marca, sincronia. Tetos se aplicam.</li>
+          <li><b>4 · Três piores</b>Problemas com timestamp, mais os 5 itens de craft de movimento.</li>
+          <li class="back"><b>5 · Corrigir e repetir</b>Re-renderize só os segundos afetados e reavalie. Pare com tudo ≥ 8, mínimo 2 rodadas.</li>
+        </ol>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Critério</th><th>Teto</th></tr></thead>
+            <tbody>
+              <tr><td>Gancho</td><td>Quadro 0 vazio ou quase em branco: máx. 6</td></tr>
+              <tr><td>Leitura</td><td>CTA ou texto essencial ilegível no sheet de celular: máx. 6. Texto-chave na zona de UI da plataforma: máx. 7</td></tr>
+              <tr><td>Movimento</td><td>Mesmo fade em toda entrada e saída: máx. 6. Salto visível numa strip: máx. 7</td></tr>
+              <tr><td>Variedade</td><td>Intervalo &gt; 2,2 s sem novidade e sem pausa narrativa deliberada: máx. 7</td></tr>
+              <tr><td>Marca</td><td>Interface, logo ou fonte inventados onde existe o real, ou segundo acento: máx. 6</td></tr>
+              <tr><td>Sincronia de som</td><td>Batida a mais de 80 ms da imagem, ou volume fora do alvo: máx. 6. Sem escuta, não pontue</td></tr>
+              <tr><td>Acabamento</td><td>Qualquer preto no meio, quadro em branco numa transição ou legenda com dupla exposição: máx. 7</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Verificador independente, opcional: só com subagentes autorizados, um agente de contexto limpo recebe os sheets e devolve apenas defeitos. Sem subagentes, registre no VERIFY.md que a revisão não foi independente.</p>
+      </section>
+
+      <section class="stage" id="e9">
+        <header><span class="tag">Etapa 9</span><h2>Render final e entrega</h2></header>
+        <p class="goal">Revisão de entretenimento, ASR novo sobre o áudio final e escuta nos pontos de corte antes de renderizar.</p>
+        <div class="code"><pre><code>npx hyperframes render --fps 60 --quality high</code></pre><button type="button" class="copy">Copiar</button></div>
+        <dl class="io">
+          <dt>Entra</dt><dd>Rascunho aprovado no loop de crítica</dd>
+          <dt>Sai</dt><dd>MP4 final, decisões de edição, transcrição retimada, composição e <span class="inline">VERIFY.md</span> com hash, medições, artefatos inspecionados, revisões e limites</dd>
+          <dt>Porta</dt><dd class="gate">Nunca chame um rascunho de final. Publicar ou enviar é ação separada e só com ordem do usuário</dd>
+        </dl>
+      </section>
+
+      <section class="block" id="arquivos">
+        <h2>Onde ficam os arquivos</h2>
+        <pre class="tree">video-projects/&lt;slug&gt;/
+  DESIGN.md                  <span class="c">direção visual</span>
+  OPEN-LOOPS.json            <span class="c">reels: perguntas do espectador e fechamentos</span>
+  REFERENCE-ANALYSIS.md      <span class="c">quando há vídeo de referência</span>
+  ENTERTAINMENT-REVIEW.md    <span class="c">quedas de atenção</span>
+  VERIFY.md                  <span class="c">evidência e limites</span>
+  index.html, compositions/  <span class="c">fontes HyperFrames</span>
+  assets/
+    raw.mp4, raw.json                          <span class="c">originais e primeira transcrição</span>
+    silenced.mp4, raw.silence-transcript.json
+    approved-cuts.json
+    clean.mp4, raw.mistakes-transcript.json
+    transcript.json                            <span class="c">tempos de clean.mp4</span>
+    plan.json, edit-decisions.json             <span class="c">plano do reel e motivos de corte</span>
+    footage-ledger.json                        <span class="c">origem do B-roll</span>
+  renders/                   <span class="c">rascunhos e finais</span></pre>
+        <p class="note">Mídia, transcrições, credenciais e renders ficam fora do git. Não copie filmagem privada para exemplos da biblioteca.</p>
+      </section>
+
+      <section class="block" id="comandos">
+        <h2>Comandos</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Etapa</th><th>Comando</th></tr></thead>
+            <tbody>
+              <tr><td class="k">Checar o kit</td><td><div class="cmd"><code>npm run check &amp;&amp; npm test</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Novo projeto</td><td><div class="cmd"><code>npm run new-video -- &lt;slug&gt;</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Transcrever</td><td><div class="cmd"><code>npm run transcribe -- &lt;raw.mp4&gt;</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Corrigir termos</td><td><div class="cmd"><code>node scripts/apply-caption-corrections.mjs &lt;transcript.json&gt;</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Preflight</td><td><div class="cmd"><code>npm run preflight -- video-projects/&lt;slug&gt;</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Beat sync</td><td><div class="cmd"><code>npm run validate-beats -- video-projects/&lt;slug&gt;</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Plano do reel</td><td><div class="cmd"><code>npm run validate:short-form -- video-projects/&lt;slug&gt;</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">B-roll</td><td><div class="cmd"><code>npm run validate:footage -- video-projects/&lt;slug&gt;</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Lint e preview</td><td><div class="cmd"><code>npx hyperframes lint &amp;&amp; npx hyperframes preview</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Rascunho / final</td><td><div class="cmd"><code>npx hyperframes render --quality draft</code><button type="button" class="copy">Copiar</button></div></td></tr>
+              <tr><td class="k">Espelhar skills</td><td><div class="cmd"><code>npm run sync:skills</code><button type="button" class="copy">Copiar</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="block" id="limites">
+        <h2>Limites</h2>
+        <ul class="limits">
+          <li>Validadores checam estrutura e tempos declarados. Não provam gancho, fatos, direitos de uso do material, enquadramento nem sincronia audível.</li>
+          <li>Detectores automáticos propõem edições. A decisão é editorial.</li>
+          <li>As notas do loop de crítica são julgamento do revisor sobre os quadros. Nunca as relate como retenção ou engajamento.</li>
+          <li>A última verificação do kit usou mídia sintética e nenhuma chamada a serviço pago.</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("button.copy");
+    if (!btn) return;
+    var box = btn.closest(".code") || btn.closest(".cmd");
+    var node = box.querySelector("pre code, code");
+    var text = node.textContent;
+    function done() { var t = btn.textContent; btn.textContent = "Copiado"; setTimeout(function () { btn.textContent = t; }, 1400); }
+    function fallback() {
+      var r = document.createRange(); r.selectNodeContents(node);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      btn.textContent = "Selecionado"; setTimeout(function () { btn.textContent = "Copiar"; }, 1400);
+    }
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (err) { fallback(); }
+  });
+
+  var links = [].slice.call(document.querySelectorAll(".toc a"));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute("href").slice(1)] = a; });
+  if (!("IntersectionObserver" in window)) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      links.forEach(function (a) { a.removeAttribute("aria-current"); });
+      var a = map[en.target.id];
+      if (a) a.setAttribute("aria-current", "true");
+    });
+  }, { rootMargin: "-20% 0px -70% 0px" });
+  Object.keys(map).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+})();
+</script>
