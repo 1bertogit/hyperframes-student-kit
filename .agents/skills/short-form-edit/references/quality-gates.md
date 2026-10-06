@@ -92,6 +92,18 @@ Look at the frames, then judge them as a harsh motion director, not the author.
    seam that jumps; a third of the 9:16 frame empty for over 1 s; a caption lifting
    out while the next lands on it; a caret that outlives its line; a hold longer
    than one bar with nothing new.
+
+   Motion craft, for any graphic that moves more than a fade. Judge from the strips:
+   - Anticipation: a big move starts with a small counter-move or a beat of tension.
+     Skip it for quick pops and hover-sized nudges.
+   - Follow-through: children, shadows, and secondary elements trail the lead by
+     roughly 50-150 ms instead of landing on the same frame.
+   - Hero leads: the focal element gets the largest displacement and the strongest
+     easing; supporting elements are subtler in every dimension.
+   - Simultaneity: with three or more animated elements, no more than a third move
+     at once. Stagger so the first has settled as the third starts.
+   - Settle: the move ends with a short overshoot or ease-out, then 100-200 ms of
+     stillness before the next one. A snap straight into the next move reads rushed.
 4. Fix them, re-render only the affected seconds, rebuild the sheets, rescore.
    Repeat until every score is 8 or higher, minimum 2 rounds.
 5. Save the scores, problems, and fixes per round in VERIFY.md.
