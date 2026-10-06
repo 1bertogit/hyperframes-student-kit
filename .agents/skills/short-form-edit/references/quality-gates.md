@@ -51,6 +51,64 @@ If a review modality is unavailable, state it explicitly. A waveform establishes
 levels and timing, not whether music is emotionally right. ASR establishes spoken
 content, not whether every audio edit sounds natural. Never count one as the other.
 
+## Scored critique loop
+
+Run before every final render, on the encoded draft, never on the composition source.
+Look at the frames, then judge them as a harsh motion director, not the author.
+
+1. Build the sheets from the draft (use the SSD for temp files):
+   - Contact sheet, 2 frames per second:
+     `ffmpeg -i draft.mp4 -vf "fps=2,scale=270:-1,tile=6x5" -frames:v 1 contact.png`
+   - Strip of 12 consecutive frames around each fast action or transition (catches pops and overlaps the contact sheet misses):
+     `ffmpeg -ss <t-0.1> -i draft.mp4 -vf "scale=320:-1,tile=12x1" -frames:v 1 strip.png`
+   - Phone scale, 360 px wide:
+     `ffmpeg -i draft.mp4 -vf "fps=1,scale=360:-1,tile=5x3" -frames:v 1 phone.png`
+   - Measured checks. Every hit is a timestamp to inspect, not an automatic fail:
+     `ffmpeg -i draft.mp4 -vf "blackdetect=d=0.04:pix_th=0.10,freezedetect=n=-50dB:d=1" -an -f null - 2>&1 | grep -E "black_start|freeze_start"`
+     `blackdetect` catches black flashes down to one frame at 25 fps; `freezedetect`
+     catches static runs over 1 s. For a graphics-only pass whose audio was
+     stream-copied, also compare `ffmpeg -i <cut>.mp4 -map 0:a -f md5 -` with the
+     draft's. A different hash means the audio changed.
+2. Open every image with Read and score 1-10: hook in the first 2 s, readability
+   at phone size, motion quality (easing, no dead frames), variety (something new
+   every 2-4 s), composition, brand accuracy, sound sync. Apply the caps below
+   before writing a score; a cap is a ceiling, not a penalty.
+
+   | Criterion | Cap |
+   |---|---|
+   | Hook | Frame 0 empty or near-blank: max 6 |
+   | Readability | CTA or must-read text illegible in `phone.png`: max 6. Key text inside the platform UI zone: max 7 |
+   | Motion quality | The same fade used as every enter and exit: max 6. A visible pop or jump in a strip: max 7 |
+   | Variety | A gap over 2.2 s with nothing new and no deliberate story hold, or a `freezedetect` hit that is not a planned hold: max 7 |
+   | Brand accuracy | Invented UI, logo, or font where the real one exists, or a second accent color: max 6 |
+   | Sound sync | A hit more than 80 ms off its picture, or loudness off target: max 6. Not listened to: do not score |
+   | Polish | Any `blackdetect` hit mid-reel, a blank frame in a handoff, or a double-exposed caption: max 7 |
+3. Write the 3 worst problems with timestamps. Hunt specifically for: text
+   overlapping during swaps, anything sliding instead of easing, corner labels and
+   frame borders, centered title on a gradient, blurry scaled text, a dead beat
+   with nothing happening. Also check these recurring failures: frame 0 empty or
+   the first word readable only after frame 3; a sound hit that lands before its
+   visual is readable (3-6 frames early); an end card static for over 1.5 s; a loop
+   seam that jumps; a third of the 9:16 frame empty for over 1 s; a caption lifting
+   out while the next lands on it; a caret that outlives its line; a hold longer
+   than one bar with nothing new.
+4. Fix them, re-render only the affected seconds, rebuild the sheets, rescore.
+   Repeat until every score is 8 or higher, minimum 2 rounds.
+5. Save the scores, problems, and fixes per round in VERIFY.md.
+
+Optional independent verifier, only when the user asks for subagents: the agent
+that edited the reel is biased toward its own work. Hand the sheets and step 3's
+hunt list to a fresh-context subagent, without your scores or reasoning. It returns
+only defects, each with timestamp, severity, and required correction. After the
+fixes, use a new subagent instance for the next round, never a continuation. Stop
+when a fresh verifier reports no relevant defects. Without subagents, do the loop
+yourself and record that the review was not independent.
+
+These scores are the reviewer's judgment of the frames. They are not audience
+metrics and never stand in for retention, engagement, or listening review. Say
+which modalities were actually reviewed, and mark sound sync "not reviewed" when
+no listening or onset check happened.
+
 When replacing a paper scene with footage, choose caption contrast from the
 actual background, including qualifiers and small secondary text. Inspect the
 first encoded frame of every inserted screen recording: fractional source seeks

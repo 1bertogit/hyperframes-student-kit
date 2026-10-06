@@ -30,6 +30,10 @@ this test. Treat the answer as editorial judgment until audience data exists.
    the student's chosen provider; ElevenLabs Scribe is Nate's default. Read
    `docs/TOOLS-AND-API-KEYS.md` for Whisper alternatives, word-timestamp
    normalization, credentials, and service costs. Never substitute an older take.
+   Add recurring brand or domain misspellings to `caption-corrections.json`, then
+   run `node scripts/apply-caption-corrections.mjs <transcript.json>`. Use the
+   `.corrected.json` for captions and on-screen text only; keep the ASR transcript
+   for beat anchors and `validate-beat-sync`.
 3. When a reference is supplied, inspect the entire reel using contact sheets,
    individual full-size frames, and contiguous frame strips at representative
    transitions. Review its sound when an audio-capable review surface is available.
